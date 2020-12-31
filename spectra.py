@@ -78,38 +78,39 @@ class Main:
         if not os.path.exists(plot_save_path):
             os.makedirs(plot_save_path)
 
-        df = sf.copy(deep=True)
-
-        def weighting(x):
-            if x[x.index[0]] > 0:
+        def weighting(x, y=0):
+            if x[x.index[0]] > y:
                 for i in x.index:
-                    if not x[i] < 0:
-                        x[i] = 0
+                    if not x[i] < y:
+                        x[i] = y
                     else:
                         break
                 for i in reversed(x.index):
-                    if not x[i] < 0:
-                        x[i] = 0
+                    if not x[i] < y:
+                        x[i] = y
                     else:
                         break
 
-            elif x[x.index[0]] < 0:
+            elif x[x.index[0]] < y:
                 for i in x.index:
-                    if not x[i] > 0:
-                        x[i] = 0
+                    if not x[i] > y:
+                        x[i] = y
                     else:
                         break
                 for i in reversed(x.index):
-                    if not x[i] > 0:
-                        x[i] = 0
+                    if not x[i] > y:
+                        x[i] = y
                     else:
                         break
-
             return x
 
-        df.apply(weighting, axis=0)
-        averages = df.rolling(50, center=True,).mean()
+        df = sf.copy(deep=True)
+        df = df.rolling(9, min_periods=1, center=True).mean()
+
+        df = df.apply(weighting, axis=0)
         low = df.rolling(1000, center=True).median()
+        df = df.apply(lambda x: weighting(x, low.min()[x.name]))
+        averages = df.rolling(50, center=True).mean()
 
         if plot_save_path:
             fig, ax = plt.subplots()
@@ -117,7 +118,10 @@ class Main:
                 ax.clear()
                 ax.set_xlim([df.index[0], df.index[-1]])
                 ax.set_ylim([averages.min().min()-5, averages.max().max()+5])
-                ax.plot(df.index.to_list(), df[column].to_list(), label="frequency")
+                ax.plot(df.index.to_list(), sf[column].to_list(),
+                        label="frequency", color="slateblue", alpha=0.5)
+                ax.plot(df.index.to_list(), df[column].to_list(),
+                        label="frequency mean (n=8)", color="blue")
                 ax.set_title(column, fontsize=12)
                 ax.axvline(averages[column].idxmax(), ymin=-10, ymax=20, ls='-',
                            label="Peak frequency: " + str(averages[column].idxmax()), color='red')
@@ -125,6 +129,8 @@ class Main:
                            label="Base power: " + str(low[column].min())[:4], color="purple")
                 ax.axvline(C.S_LINE, ymin=-10, ymax=20, ls='--', label="H line", color='green')
                 ax.legend(loc=3, fontsize=8)
+                plt.draw()
+                plt.waitforbuttonpress()
                 plt.savefig('{}{}.png'.format(plot_save_path, column), bbox_inches='tight')
 
         peaks = pd.DataFrame({"frequency": averages.idxmax().to_list()}, index=averages.idxmax().index)
